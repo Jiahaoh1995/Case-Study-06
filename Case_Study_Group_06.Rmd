@@ -1,0 +1,980 @@
+---
+title: "Case Study Group 06"
+author: "Jiahao Huang, Qing Yang, Yunong Pan, Zhifeng Li, Chao Zhang"
+date: "15.08.2019"
+output: 
+  html_document: 
+    theme: cerulean
+    toc: yes
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+**Einleitung**
+Das Unternehmen “213” produziert Ledersitzbezügen (T14), der mehrere Automobilhersteller mit Teilen beliefert. Die Lieferkette besteht aus zwei Instanzen: dem Teilelieferanten und dem Komponentenlieferanten. Die Produktionsfabrik installiert die Komponenten in den jeweiligen Fahrzeugen. 
+Die Analyse bezieht sich einerseits auf die Registrierung von Fahrzeugen, die unsere Sitzbezüge über Postleitzahlen und Fahrzeugtypen installiert haben. Ausgehend von den bereitgestellten Daten, die manuell aus der TUB Cloud heruntergeladen wurden, werden diese im ersten Teil der Aufgabe eingelesen und zur weiteren Verarbeitung abgespeichert. Aufgabenteil 2 enthält die Analyse der Roh-Daten und das Zusammenführen relevanter Datenstränge zu einem finalen Datensatz, der als Ausgangspunkt für die Shiny Applikation dient.
+Teil 3 enthält die Herstellung von Shinyapp, die einen Balkendiagramm, das die monatliche Registrierung von Fahrzeugen mit unseren Ledersitzbezügen anzeigt. Dazu gehören eine Tabelle und eine Karte, die notwendige Informationen enthält und die die Anzahl der zugelassenen Fahrzeuge mit Sitzbezug in ganz Deutschland zeigt.
+
+## 1 Datenimport
+
+Zur Nutzung der R-Funktion muss vorher die notwendigen Pakete geladen werden
+```{r warning = FALSE, message = FALSE}
+if(!require(tidyverse)) {
+  install.packages("tidyverse")
+  require(tidyverse)
+}
+
+if(!require(stringr)) {
+  install.packages("stringr")
+  require(stringr)
+}
+
+library(dplyr)
+library(magrittr)
+```
+
+###1.1 Ordner "Einzelteil" 
+Um einen ersten Eindruck zu bekommen, was für Daten zur Verfügung stehen, werden diese zuerst für jeden Ordner aufgelistet. Dann werden die benötigte Daten eingelesen und gespeichert. Danach wird der Aubau von gespeicherte Daten beobachtet. Die gleiche Schritte gelten auch für folgende Ordner bzw. “Fahrzeuge“, “Geodaten“, “Komponenten“, und “Zulassungen“.
+
+Der Ordner "Einzelteil" enthält folgende Dateien:
+```{r warning = FALSE}
+useBytes = TRUE
+Einzelteil_ordner <- list.files(path = "Data/Einzelteil")
+Einzelteil_ordner
+```
+
+Einlesen von Teil 14. Benötigt wird nur das Einzelteil T14.(in Aufgabestellung erwähnt)
+```{r warning = FALSE}
+Einzelteil_T14 <- read_csv2("Data/Einzelteil/Einzelteil_T14.csv", col_names = TRUE)
+```
+
+Inhalt/Aufbau anschauen.(mit 2 verschiedenen Verfahren)
+```{r warning = FALSE}
+str(Einzelteil_T14)
+```
+
+###1.2 Ordner "Fahrzeug"
+
+Auflisten, welche Dateien in dem Ordner gespeichert sind.
+```{r warning = FALSE}
+Fahrzeug_ordner <- list.files(path = "Data/Fahrzeug")
+Fahrzeug_ordner
+```
+
+Pfadangabe
+```{r warning = FALSE}
+Fahrzeug_pfad <- file.path("Data/Fahrzeug",Fahrzeug_ordner)
+```
+
+Fahrzeugbestandteile einlesen und abspeichern in Variablen.
+Achtung: read_csv2 führt zum inkorrekten Laden des Inhaltes, wegen anderem Trennzeichen. Stattdessen wird read_csv genutzt, was zum korrekten Einlesen führt.
+```{r warning = FALSE}
+Bestandteile_Fahrzeuge_OEM1_Typ11 <- read_csv2(Fahrzeug_pfad[1], col_names = TRUE)
+Bestandteile_Fahrzeuge_OEM1_Typ12 <- read_csv2(Fahrzeug_pfad[2], col_names = TRUE)
+Bestandteile_Fahrzeuge_OEM2_Typ21 <- read_csv2(Fahrzeug_pfad[3], col_names = TRUE)
+Bestandteile_Fahrzeuge_OEM2_Typ22 <- read_csv2(Fahrzeug_pfad[4], col_names = TRUE)
+Fahrzeuge_OEM1_Typ11 <- read_csv(Fahrzeug_pfad[5], col_names = TRUE)
+Fahrzeuge_OEM1_Typ12 <- read_csv2(Fahrzeug_pfad[6], col_names = TRUE)
+Fahrzeuge_OEM2_Typ21 <- read_csv(Fahrzeug_pfad[7], col_names = TRUE)
+Fahrzeuge_OEM2_Typ22 <- read_csv2(Fahrzeug_pfad[8], col_names = TRUE)
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+str(Bestandteile_Fahrzeuge_OEM1_Typ11)
+str(Bestandteile_Fahrzeuge_OEM1_Typ12)
+str(Bestandteile_Fahrzeuge_OEM2_Typ21)
+str(Bestandteile_Fahrzeuge_OEM2_Typ22)
+str(Fahrzeuge_OEM1_Typ11)
+str(Fahrzeuge_OEM1_Typ12)
+str(Fahrzeuge_OEM2_Typ21)
+str(Fahrzeuge_OEM2_Typ22)
+```
+
+###1.3 Ordner "Geodaten"
+
+Auflisten, welche Dateien in dem Ordner gespeichert sind.
+```{r warning = FALSE}
+Geodaten_ordner <- list.files(path = "Data/Geodaten")
+Geodaten_ordner
+```
+
+Pfadangabe:
+```{r warning = FALSE}
+Geodaten_pfad <- file.path("Data/Geodaten",Geodaten_ordner)
+```
+
+Benötigt werden Daten zu den Gemeinden aus Datei 1.
+```{r warning = FALSE}
+Geodaten_Gemeinden <- read_csv2(Geodaten_pfad[1], col_names = TRUE)
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+str(Geodaten_Gemeinden)
+```
+
+###1.4 Ordner "Komponenten"
+
+Auflisten, welche Dateien in dem Ordner gespeichert sind.
+```{r warning = FALSE}
+Komponente_ordner <- list.files(path = "Data/Komponente")
+Komponente_ordner
+```
+
+Pfadangabe
+```{r warning = FALSE}
+Komponente_pfad <- file.path("Data/Komponente",Komponente_ordner)
+```
+
+Nach Beobachten von Spaltenamen, nur K2LE1 enthält T14, deshalb wird nur K2LE1 benötigt.
+```{r warning = FALSE}
+Bestandteile_Komponente_K2LE1 <- read_csv2(Komponente_pfad[5], col_names = TRUE)
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+summary(Bestandteile_Komponente_K2LE1)
+```
+
+
+###1.5 Ordner "Zulassungen"
+
+Auflisten, welche Dateien in dem Ordner gespeichert sind.
+```{r warning = FALSE}
+Zulassungen_ordner <- list.files(path = "Data/Zulassungen")
+Zulassungen_ordner
+```
+
+Pfadangabe
+```{r warning = FALSE}
+Zulassungen_pfad <- file.path("Data/Zulassungen",Zulassungen_ordner)
+```
+
+Eine Datei, die die Zulassungsdaten aller Fahrzeuge enthält.
+```{r warning = FALSE}
+Zulassungen_alle_Fahrzeug <- read_csv2(Zulassungen_pfad, col_names = TRUE)
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+str(Zulassungen_alle_Fahrzeug)
+```
+
+
+##2 Bearbeiten der Daten
+Nach Einlesen und Beobachten von alle Daten werden dann die Korrelationen zwischen den einzelnen Daten herausgefunden bzw. gemeinsame Spaltnamen und dann in einen Datensatz zusammengefügt und gespeichert. Dieser Datensatz dient zur Herstellung von Shinyapp.
+
+###2.1 Einzelteil T14
+Nach Bedarf von Aufgabestellung werden die entsprechende Spalten: “ Herstellernummer_T14“, “ Werksnummer_T14“, “ Fehlerhaft_T14“ ausgewählt. Da das Unternehmen 213 ist, wird die Spalte “Herstellernummer_T14“ mit entsprechende Nummer “213“ gefiltert.
+```{r results='hold', warning = FALSE}
+ T14_info <- Einzelteil_T14 %>%
+  select(ID_T14, 
+         Herstellernummer_T14 = Herstellernummer, 
+         Werksnummer_T14 = Werksnummer, 
+         Fehlerhaft_T14 = Fehlerhaft
+  ) %>%
+  filter(
+    Herstellernummer_T14 == 213
+  )
+```
+
+Gibt es NA-Einträge?
+```{r warning = FALSE}
+any(is.na(T14_info)) # nein
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+summary(T14_info)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r warning = FALSE}
+rm(Einzelteil_T14)
+```
+
+Datensatz "T14_info" enthält Daten zu allen Sitzbezugen T14, die vom Werk/Unternehmen "213" produziert wurden. Über die Komponentendaten können die Einzelteile den Sitzbezugen zugeordnet werden. Über die Sitzes-ID's diese wiederum zu den Fahrzeugen und damit den Zulassungen und Geodaten.
+
+In welchen Komponenten sind die Einzelteile verbaut? 
+
+###2.2 Komponenten
+
+Gibt es NA-Einträge?
+```{r warning = FALSE}
+any(is.na(Bestandteile_Komponente_K2LE1)) # nein
+```
+
+Zusammenfassung des Datensatzes:
+```{r warning = FALSE}
+summary(Bestandteile_Komponente_K2LE1)
+```
+Untersuchung der NA-Einträge:
+```{r results='hold', warning = FALSE}
+index_ID_T14 <- which(is.na(Bestandteile_Komponente_K2LE1$ID_T14))
+index_ID_K2LE1 <- which(is.na(Bestandteile_Komponente_K2LE1$ID_K2LE1))
+
+identical(index_ID_T14, index_ID_K2LE1)
+```
+
+Nur ID_T14 und ID_K2LE1 werden benötigt.
+```{r results='hold', warning = FALSE}
+K2LE1_info <- Bestandteile_Komponente_K2LE1 %>%
+  select(
+    ID_T14,
+    ID_Sitze = ID_K2LE1
+  ) 
+```
+
+Gibt es NA-Einträge?
+```{r warning = FALSE}
+any(is.na(K2LE1_info)) # nein
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+summary(K2LE1_info)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r warning = FALSE}
+rm(Bestandteile_Komponente_K2LE1)
+```
+
+Dann kommt eine Frage: In welchen Fahrzeugen sind diese Sitzbezugen verbaut?
+
+###2.3 Fahrzeug
+Zusammenfassung des Datensatzes von Typ 11,12,21 und 22 durch ID_Fahrzeug_Typ11
+Typ11:
+```{r results='hold', warning = FALSE}
+OEM1_Typ11 <- Fahrzeuge_OEM1_Typ11 %>% 
+  select(
+    ID_Fahrzeug,
+    Herstellernummer_Fahrzeug = Herstellernummer,
+    Werksnummer_Fahrzeug = Werksnummer,
+    Fehlerhaft_Fahrzeug = Fehlerhaft
+  ) %>% 
+  left_join(
+    select(Bestandteile_Fahrzeuge_OEM1_Typ11,
+           ID_Sitze,
+           ID_Fahrzeug
+    ),
+    by = "ID_Fahrzeug"
+  )
+any(is.na(OEM1_Typ11)) # nein
+summary(OEM1_Typ11)
+```
+
+Typ12:
+```{r results='hold', warning = FALSE}
+OEM1_Typ12 <- Fahrzeuge_OEM1_Typ12 %>% 
+  select(
+    ID_Fahrzeug,
+    Herstellernummer_Fahrzeug = Herstellernummer,
+    Werksnummer_Fahrzeug = Werksnummer,
+    Fehlerhaft_Fahrzeug = Fehlerhaft
+  ) %>% 
+  left_join(
+    select(Bestandteile_Fahrzeuge_OEM1_Typ12,
+           ID_Sitze,
+           ID_Fahrzeug
+    ),
+    by = "ID_Fahrzeug"
+  )
+any(is.na(OEM1_Typ12)) # nein
+summary(OEM1_Typ12)
+```
+
+Typ21:
+```{r results='hold', warning = FALSE}
+OEM2_Typ21 <- Fahrzeuge_OEM2_Typ21 %>% 
+  select(
+    ID_Fahrzeug,
+    Herstellernummer_Fahrzeug = Herstellernummer,
+    Werksnummer_Fahrzeug = Werksnummer,
+    Fehlerhaft_Fahrzeug = Fehlerhaft
+  ) %>% 
+  left_join(
+    select(Bestandteile_Fahrzeuge_OEM2_Typ21,
+           ID_Sitze,
+           ID_Fahrzeug
+    ),
+    by = "ID_Fahrzeug"
+  )
+any(is.na(OEM2_Typ21)) # nein
+summary(OEM2_Typ21)
+```
+
+Typ22:
+```{r results='hold', warning = FALSE}
+OEM2_Typ22 <- Fahrzeuge_OEM2_Typ22 %>% 
+  select(
+    ID_Fahrzeug,
+    Herstellernummer_Fahrzeug = Herstellernummer,
+    Werksnummer_Fahrzeug = Werksnummer,
+    Fehlerhaft_Fahrzeug = Fehlerhaft
+  ) %>% 
+  left_join(
+    select(Bestandteile_Fahrzeuge_OEM2_Typ22,
+           ID_Sitze,
+           ID_Fahrzeug
+    ),
+    by = "ID_Fahrzeug"
+  )
+any(is.na(OEM2_Typ22)) # nein
+summary(OEM2_Typ22)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r, warning = FALSE}
+rm(Bestandteile_Fahrzeuge_OEM1_Typ12)
+rm(Fahrzeuge_OEM1_Typ12)
+rm(Bestandteile_Fahrzeuge_OEM2_Typ22)
+rm(Fahrzeuge_OEM2_Typ22)
+rm(Bestandteile_Fahrzeuge_OEM1_Typ11)
+rm(Fahrzeuge_OEM1_Typ11)
+rm(Bestandteile_Fahrzeuge_OEM2_Typ21)
+rm(Fahrzeuge_OEM2_Typ21)
+```
+
+Zusammenfügen in einen Datensatz.
+```{r results='hide', warning = FALSE}
+OEM_Alle <- bind_rows(OEM1_Typ11, OEM1_Typ12, OEM2_Typ21, OEM2_Typ22)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r, warning = FALSE}
+rm(OEM1_Typ11)
+rm(OEM1_Typ12)
+rm(OEM2_Typ21)
+rm(OEM2_Typ22)
+```
+
+###2.4 Zulassung
+
+**Informationen zu bisherigen Daten hinzufügen**
+Hinzufügen der Informationen von Komponenten an den Einzelteil-Datensatz.
+```{r results='hold', warning = FALSE}
+T14_plus_K2LE1 <- T14_info %>%
+  left_join(
+    K2LE1_info,
+    by = "ID_T14"
+  )
+```
+
+Gibt es NA-Einträge?
+```{r warning = FALSE}
+any(is.na(T14_plus_K2LE1))
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+summary(T14_plus_K2LE1)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r warning = FALSE}
+rm(T14_info)
+rm(K2LE1_info)
+```
+
+Welche Fahrzeuge hat Sitzbezug T14 gebaut?
+```{r results='hold', warning = FALSE}
+T14_K2LE1_Fahrzeug_Alle <- OEM_Alle %>%
+  left_join(
+    T14_plus_K2LE1,
+    by = "ID_Sitze"
+  )
+```
+
+Gibt es NA-Einträge?
+```{r warning = FALSE}
+any(is.na(T14_K2LE1_Fahrzeug_Alle)) 
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+summary(T14_K2LE1_Fahrzeug_Alle)
+```
+
+NA's entfernen:
+```{r warning = FALSE}
+T14_K2LE1_Fahrzeug <- na.omit(T14_K2LE1_Fahrzeug_Alle)
+```
+
+Gibt es NA-Einträge?
+```{r warning = FALSE}
+any(is.na(T14_K2LE1_Fahrzeug)) 
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+summary(T14_K2LE1_Fahrzeug)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r warning = FALSE}
+rm(OEM_Alle)
+rm(T14_plus_K2LE1)
+rm(T14_K2LE1_Fahrzeug_Alle)
+```
+
+Wo wurden die Fahrzeuge zugelassen?
+```{r results='hold', warning = FALSE}
+Datensatz_Zulassungen <- T14_K2LE1_Fahrzeug %>% 
+  left_join(
+    select(Zulassungen_alle_Fahrzeug,
+           ID_Fahrzeug = IDNummer,
+           Zulassung_Datum = Zulassung,
+           Zulassung_Gemeinde = Gemeinden
+    ),
+    by = "ID_Fahrzeug"
+  )
+```
+
+Gibt es NA-Einträge?
+```{r warning = FALSE}
+any(is.na(Datensatz_Zulassungen)) 
+```
+
+Inhalt/Aufbau anschauen.
+```{r warning = FALSE}
+summary(Datensatz_Zulassungen)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r warning = FALSE}
+rm(T14_K2LE1_Fahrzeug)
+rm(Zulassungen_alle_Fahrzeug)
+```
+
+Geodaten für die Zulassungs-Gemeinden hinzufügen.
+```{r results='hold', warning = FALSE}
+Datensatz_Ausfuehrlich <- Datensatz_Zulassungen %>% 
+  left_join(
+    select(Geodaten_Gemeinden,
+           Zulassung_Gemeinde = Gemeinde,
+           Postleitzahl,
+           Laengengrad,
+           Breitengrad),
+    by = "Zulassung_Gemeinde"
+  ) 
+```
+
+Gibt es NA-Einträge? 
+```{r warning = FALSE}
+any(is.na(Datensatz_Ausfuehrlich)) # ja
+```
+
+Zusammenfassung des Datensatzes:
+```{r warning = FALSE}
+summary(Datensatz_Ausfuehrlich)
+```
+
+NA's entfernen
+```{r warning = FALSE}
+Datensatz_Ausfuehrlich_sauber <- na.omit(Datensatz_Ausfuehrlich)
+```
+
+Gibt es NA-Einträge? 
+```{r warning = FALSE}
+any(is.na(Datensatz_Ausfuehrlich_sauber)) 
+```
+
+Zusammenfassung des Datensatzes:
+```{r warning = FALSE}
+summary(Datensatz_Ausfuehrlich_sauber)
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r warning = FALSE}
+rm(Geodaten_Gemeinden)
+rm(Datensatz_Zulassungen)
+rm(Datensatz_Ausfuehrlich)
+```
+
+###2.5 Datensatz erstellen
+```{r results='hold', warning = FALSE}
+Datensatz_Analyse <- Datensatz_Ausfuehrlich_sauber %>% 
+  select(
+    ID_T14,
+    ID_Sitze,
+    ID_Fahrzeug,
+    Zulassung_Datum,
+    Zulassung_Gemeinde,
+    Werksnummer_Fahrzeug,
+    Postleitzahl,
+    Laengengrad,
+    Breitengrad
+  )
+```
+
+Zusammenfassung des Datensatzes:
+```{r warning = FALSE}
+summary(Datensatz_Analyse)
+```
+
+Datensatz speichern im RData-Format.
+```{r warning = FALSE}
+save(Datensatz_Analyse, file = "Finaler_Datensatz_06.RData")
+```
+
+Löschen der nicht mehr genutzten Variablen/Datensätze, um Speicherkapazität hoch zu halten.
+```{r warning = FALSE}
+rm(Datensatz_Ausfuehrlich_sauber)
+```
+
+##3 Shiny App
+Innerhalb der Shiny-App soll eine Übersicht entstehen über die betroffenen Fahrzeuge. Wie es in der Einleitung erwähnt wird, werden die folgen Teilen dargestellt:
+
+* Bedienfeld
+	* Kann sowohl Fahrzeugtyp (11 oder 12) als auch Zeitraum (im Monat) auswählen. Das dient zur Kontrolle von Heatmap und Balkendiagramm. Mit **update** Button kann Fahrzeugtyp nach Auswahl aktualisiert wird. 
+* Balkendiagramm
+	* Zeigt die monatliche Registrierung von Fahrzeugen mit unseren Ledersitzbezügen. Das Zeitraum kann durch Bedienfeld beliebig gewählt werden.
+* Tabelle
+* Es gibt hier 2 Tabellen und die werden in 2 Fenster dargestellt. Erste Tabelle **Data Graph**, die nur mit notwendiger Information dargestellt wird, dient zur Unterstützung  von Visualisierung der Balkendiagramm sowie Heatmap. 
+* Zweite Tabelle enthält alle Daten, die vorher bereinigt werden.
+* Heatmap (inklusive die Anzahl der registrierten Fahrzeuge)
+	* zeigt alle betroffenen Fahrzeuge in den Zulassungsgemeinden. Die Daten werden entsprechend des Fahrzeugtyps unterteilt.
+
+Notwendigen Pakete laden.
+```{r}
+if(!require(tidyverse)) {
+  install.packages("tidyverse")
+  require(tidyverse)
+}
+
+if(!require(lubridate)) {
+  install.packages("lubridate")
+  require(lubridate)
+}
+
+if(!require(shiny)) {
+  install.packages("shiny")
+  require(shiny)
+}
+
+if(!require(shinyjs)) {
+  install.packages("shinyjs")
+  require(shinyjs)
+}
+
+if(!require(plotly)) {
+  install.packages("plotly")
+  require(plotly)
+}
+
+if(!require(leaflet)) {
+  install.packages("leaflet")
+  require(leaflet)
+}
+
+if(!require(leaflet.extras)) {
+  install.packages("leaflet.extras")
+  require(leaflet.extras)
+}
+
+if(!require(ggsci)) {
+  install.packages("ggsci")
+  require(ggsci)
+}
+
+
+
+Datensatz <- get(load("Finaler_Datensatz_06.RData"))
+
+erstes <- min(Datensatz$Zulassung_Datum)
+letztes <- max(Datensatz$Zulassung_Datum)
+
+getColor <- 'blue'
+
+
+icons <- awesomeIcons(
+  icon = 'ion-android-car',
+  iconColor = 'white',
+  library = 'ion',
+  markerColor = getColor
+)
+
+
+ui <- fluidPage(
+  useShinyjs(),
+  
+  fluidRow(
+
+
+
+    column(6,
+           # Titel
+           titlePanel(
+             br(),
+             title = "CASE STUDY 06" 
+           ),
+           h4("Identify popularity of leather cover T14 in Germany"),
+           h5("Seat cover mancufacturer 213")
+    ),
+    column(6,
+           h6("TU Berlin", align = "right"),
+           h6("Institut für Werkzeugmaschinen und Fabrikbetrieb", align = "right"),
+           h6("Introduction to Engineering Data Analytics with R", align = "right"),
+           h6("SS19, 22.08.2019", align = "right")
+    )
+  ),
+  #eine leere Zeile einfügen, um die Übersichtlichkeit zu verbessern.
+  br(),
+
+
+
+  fluidRow(
+    # Überschrift für Graph
+    h3(" Monthly registration of vehicles ", align = "center"),
+    
+    column(4,
+           
+           br(),
+           br(),
+           br(),
+           
+           #Seitenleiste Datenauswahl
+           wellPanel(
+             
+             #Gemeinde/n auswählbar, in der/denen Fahrzeuge zugelassen wurden
+             selectizeInput(
+               inputId = "vehicle",
+               label = "Vehicle type",
+               choices = sort(unique(Datensatz$Werksnummer_Fahrzeug))
+             ),
+             
+             #Zeitraum auswählen des Zulassungsverlaufs in gewählter/n Gemeinde/n
+             sliderInput(
+               inputId = "zeitraum",
+               label = "Date in month",
+               min = as.Date(erstes),
+               max = as.Date(letztes),
+               value = c(as.Date(erstes), as.Date(letztes)),
+               timeFormat = "%m %Y"
+             ),
+             
+             #Update Button zum Aktualisieren des Main Panel nach Ändern der Datenauswahl
+             actionButton(
+               inputId = "update",
+               label = "update"
+             )
+           )
+    ),
+
+
+    #Hauptfenster Output
+    column(8,
+           
+           #Graph zeitlicher Zulassungsverlauf für gewählte Gemeinde
+           plotlyOutput(
+             outputId = "graph"
+           )
+    ),
+    
+    br(),
+
+
+
+    column(12,  
+           tabsetPanel(
+             
+             #zugehörige Tabelle mit Daten zum Graph
+             tabPanel("Data Graph",
+                      dataTableOutput(
+                        outputId = "tabelle"
+                      )
+             ),
+             
+             # gesamter Datensatz
+             tabPanel("Data Total",
+                      dataTableOutput(
+                        outputId = "daten_gesamt"
+                      )
+             )
+           )
+    ),
+    
+    br(),
+    br(),
+
+
+
+    # Karte
+    column(12,
+           # Überschrift für Karte
+           br(),
+           h3("Regional distribution of vehicle registrations", align = "center"),
+           br(),  
+           
+           # Kartengröße an Fenstergröße anpassen.
+           tags$style(type = "text/css", "#karte {height: calc(100vh - 120px) !important;}"),
+           
+           title = "Map",
+           
+           leafletOutput(
+             outputId = "karte"),
+           
+           br(),
+           hr()
+    )
+  )
+)
+
+
+
+
+server <- function(input, output, session) {
+  
+  # Datenaufruf nach Aktualisierung
+  daten_nach_input <- reactive({
+    
+    # Aktualisierungs-Button
+    input$update
+    
+    isolate({
+      
+      # Filtern der Daten nach eingegebener Fahrzeugtype.
+      daten <- filter(Datensatz,
+                      Werksnummer_Fahrzeug == input$vehicle)
+      
+      # Berechnung der Anzahl an Zulassungen pro Tag in gewählter Gemeinde.
+      haeufigkeit_je_monat <- as.data.frame(table(daten$Zulassung_Datum)) %>%
+        
+        # Umbennenen der Variablen als Vorbereitung zum Joinen.
+        rename(Zulassung_Datum = Var1, 
+               Haeufigkeit = Freq) %>%
+        
+        # Zulassung-Datum wieder ins Datum-Format ändern.
+        mutate(Zulassung_Datum = ymd(Zulassung_Datum))
+      
+      # Haeufigkeiten an Datensatz binden.
+      daten_input <- left_join(daten, 
+                               haeufigkeit_je_monat, by = "Zulassung_Datum") %>%
+        
+        # Auswahl des Zeitraums über Slider.
+        filter(Zulassung_Datum %in% input$zeitraum[1]:input$zeitraum[2])
+    })
+  })
+
+  
+  
+  # Datensatz für Heatmap variabel durch Drop-Down Fenster.
+  daten_filter <- reactive({
+    
+    # Update, wenn Aktualisieren-Button gedrückt wird.
+    input$update
+    isolate({
+      
+      # Auswahl des Fahrzeugtyps durch Drop-Down Fenster.
+      daten <- filter(Datensatz,
+                      Werksnummer_Fahrzeug == input$vehicle)
+    })
+  })
+
+  
+  
+  # Statischer Teil der Karte, wird nur einmal geladen.
+  output$karte <- renderLeaflet({
+    
+    leaflet(Datensatz) %>%
+      addProviderTiles("Stamen.TonerLite", 
+                       group = "Simpel (Standard)", 
+                       options = providerTileOptions(minZoom = 4, maxZoom = 13)) %>%
+      addTiles(group = "Open Street Map") %>%
+      
+      # Konzentration des Zooms auf die Koordinaten im Datensatz.
+      fitBounds(
+        ~min(Laengengrad)-1, 
+        ~min(Breitengrad)-1, 
+        ~max(Laengengrad)+1, 
+        ~max(Breitengrad)+1) 
+  })
+
+  
+  
+  #Output1 Graph:  # zeitlicher Zulassungsverlauf der Fahrzeuge 
+  output$graph <- renderPlotly({
+    
+    # Berechnung der Zulassungen pro Monat.
+    Datensatz %>% mutate(Zulassung_Datum = ymd(Zulassung_Datum),
+                       Year = Zulassung_Datum%>%year(),
+                       Month = Zulassung_Datum %>% month()) %>%
+      filter(Zulassung_Datum >= input$zeitraum[1]&Zulassung_Datum<=input$zeitraum[2]) %>%
+      group_by(Year,Month,Werksnummer_Fahrzeug) %>%summarise(sum_number=n()) %>%
+      
+      # # Output Graph Zulassungen pro Monat.
+      ggplot(aes(x =factor(Month),y=sum_number,
+                 fill=factor(Werksnummer_Fahrzeug))) + 
+      geom_bar(stat = "identity") +facet_grid(Year~.)+
+      
+      # Achsenbeschriftung.
+      labs(x="Month", 
+           y="Number of vehicle registrations per month",
+           fill="Werksnummer_Fahrzeug") +
+      theme(axis.text = element_text(size=6),
+            axis.title = element_text(size=8))+
+      scale_fill_d3()
+    
+  })
+
+  
+  
+  #Output2 Tabelle: Daten zum Graph
+  output$tabelle <- renderDataTable(
+    
+    # Aktualisierte Daten.
+    select(
+      daten_nach_input(), 
+      1:6),
+    
+    # Veränderung des default wie viele Einträge der Tabelle angezeigt werden.
+    options = list(
+      pageLength = 5, 
+      lengthMenu = c(5, 10, 15, -1)
+    )
+  )
+
+  
+  
+  #Output3 Tabelle: Datensatz gesamt.
+  output$daten_gesamt <- renderDataTable(
+    
+    Datensatz[order(Datensatz$Zulassung_Gemeinde),],
+    
+    options = list(
+      pageLength = 5, 
+      lengthMenu = c(5, 10, 15, -1)
+    )
+  )
+
+  
+  
+  # Output4 Heatmap: zum gesamten Datensatz
+  observe({
+    
+    leafletProxy("karte", data = daten_filter()) %>%
+      
+      # Löschen von vorherigen Ausgaben, wenn Daten verändert wurden.
+      clearShapes() %>%
+      clearPopups() %>%
+      clearMarkers() %>%
+      clearMarkerClusters %>%
+      clearHeatmap %>%
+      
+      # Heatmap wird in ein extra Layer auf statische Karte gelegt mit im Datensatz vorhandenen Koordinaten.
+      addHeatmap(lng = ~Laengengrad, 
+                 lat = ~Breitengrad, 
+                 max = .6,
+                 group = "Heatmap",
+                 blur = 60) %>%
+      
+      # Markereinstellungen.
+      addAwesomeMarkers(
+        lng = ~Laengengrad, 
+        lat = ~Breitengrad,
+        icon = icons,
+        
+        # Popup zeigt Zulassungsort, Postleitzahl und Fahrzeug_ID.
+        popup = ~paste(
+          "<b>Zulassungsort: </b>", Zulassung_Gemeinde, "<br>",
+          "<b>Postleitzahl: </b>", Postleitzahl, "<br>",
+          "<b>Fahrzeug: </b>", ID_Fahrzeug, "<br>"),
+        
+        # Für eine bessere Übersicht, werden die Marker in Cluster zusammengefasst.
+        clusterOptions = markerClusterOptions(),
+        group = "Detailliert"
+      ) %>%
+      
+      addLayersControl(
+        baseGroups = c("Simpel (Standard)", "Open Street Map"),
+        overlayGroups = c("Detailliert", "Heatmap"),
+        position = "bottomleft",
+        options = layersControlOptions(collapsed = TRUE)
+      ) %>%
+      
+      # Heatmap wird beim Start nicht angezeigt.
+      hideGroup(group = "Heatmap")
+    
+  })
+  
+}
+
+
+shinyApp(ui = ui, server = server)
+```
+
+
+##4 Ergebnisse Diskussion
+###4.1 Balkendiagramm
+```{r echo=FALSE}
+Datensatz %>% mutate(Zulassung_Datum = ymd(Zulassung_Datum),
+                     Year = Zulassung_Datum%>%year(),
+                     Month = Zulassung_Datum %>% month()) %>%
+  filter(Zulassung_Datum >= as.Date(erstes)&Zulassung_Datum<= as.Date(letztes)) %>%
+  group_by(Year,Month, Werksnummer_Fahrzeug) %>%summarise(sum_number=n()) %>%
+  
+  # # Output Graph Zulassungen pro Monat.
+  ggplot(aes(x =factor(Month),y=sum_number,
+             fill=factor(Werksnummer_Fahrzeug))) + 
+  geom_bar(stat = "identity") +facet_grid(Year~.)+
+  
+  # Achsenbeschriftung.
+  labs(x="Month", 
+       y="Number of vehicle registrations per month",
+       fill="Werksnummer_Fahrzeug") +
+  theme(axis.text = element_text(size=6), 
+        axis.title = element_text(size=8))+
+  scale_fill_d3()
+```
+
+Aus die Balkendiagramm ist es deutlich zu sehen, wie die Ledersitzbezüge T14 monatlich verkauft bzw. registriert werden. Die Analyse wird in 2 Richtungen durchgeführt: In der Richtung Zeit, In der Richtung Fahzeugtyp.
+1. In der Richtung Zeit: Es gibt keine bestimmte Regel, aber am Anfang eines Jahrs, inder Mittel eines Jahrs und am Ende eines Jahrs erscheinen wenigere Verkäufe von Sitzbezügen im vergleich zu anderen Monaten.
+2. In der Richtung Fahrzeugtyp: Die Sitzbezüge auf Fahrzeugtyp 12 werden normaleweise mehr als die auf Fahrzeugtyp 11 verkauft.
+
+
+###4.2 Map
+Schließlich ist es auch der wichtigste Teil. Als nächstes wird die Verteilung von Sitzbezüge T14 in Deutschland analysiert und durch die Analyse ist es klar zu verstehen, wo sich T14 am besten verkauft. Die Analyse wird in 3 Teilen durchgeführt bzw. auf Fahrzeugtyp 11, auf Fahrzeugtyp 12 und Vergleichen der Sitzbezüge auf verschiedenen Fahzeugtypen in gleicher Gemeinde.
+
+**Wichtig: Die Vergleichen von Gemeinden werden nur mit gleichem Abstand in Map durchgeführt!**
+
+####4.2.1 Sitzbezüge auf Fahzeugtyp 11
+![](Additional_Files_Group_06/Typ11_01.png)
+
+Auf den ersten Abstand ist es zu erfahren, dass die Sitzbezüge auf Fahrzeugtyp 11 in Westdeutschland mehr beliebig sind. Aber die Zahlen in der Nähe von Leizig, Stuttgart und Munich auch hoch sind. Deshalb sind diese 3 Gemeinde auch notwendig zu prüfen.
+
+
+
+![](Additional_Files_Group_06/Typ11_02.png)
+
+Auf den zweiten Abstand werden in oberem Bild rot markierte Gemeinde eingefallen.
+
+
+
+![](Additional_Files_Group_06/Typ11_03.png)
+
+Am Ende ist es mit Hilfe von Heatmap deutlich zu sehen, dass die Sitzbezüge auf Fahrzeugtyp 11 in diesen zwei Städten Köln und Essen am beliebtesten sind.
+
+
+####4.2.2 Sitzbezüge auf Fahzeugtyp 12
+![](Additional_Files_Group_06/Typ12_01.png)
+
+Auf den ersten Abstand wird es zu eingefallen, dass die Sitzbezüge sowohl in Westdeutschland als auch in Süddeutschland beliebig sind.
+
+
+
+![](Additional_Files_Group_06/Typ12_02.png)
+
+Auf den zweiten Abstand ist es  eingefallen, dass die Sitzbezüge in den Städten Dortmund, Köln und Munich mehr beliebig sind. Und diese Städte werden in nächstem Schritt geprüft.
+
+
+
+![](Additional_Files_Group_06/Typ12_03.png)
+
+Mit Hilfe von Heatmap ist es auf dritten Abstand deutlich zu erfahren, dass die Sitzbezüge T14 auf das Fahrzeugtyp 12 in Köln am beliebtesten sind.
+
+###4.3 Zusammenfassung
+Die Ledersitzbezüge T14, die sowohl für Fahrzeugtyp 11 als auch für Fahrzeugtyp 12 benutzt werden, sind in Stadt Köln am beliebtesten.
